@@ -70,7 +70,7 @@ export class PostsService {
   }
 
   async findAll() {
-    const result=await  this.postModel.find()
+    const posts=await  this.postModel.find()
     .populate({
       path: 'tags',
       model: 'Tag', 
@@ -83,12 +83,40 @@ export class PostsService {
     })
     .exec()
 
+    const result=await Promise.all(
+      posts.map((post)=>{
+        return {
+          ...post.toObject(),
+          tags: post.tags ? post.tags.map(tag => tag['name']): null,  
+          category: post.category ? post.category['name'] : null,  // Extract the 'name' from category
+      };
+      })
+    );
+
     return result;
 
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} post`;
+  async findOne(id: string) {
+    const post=await this.postModel.findById(id)
+    .populate({
+      path: 'tags',
+      model: 'Tag', 
+      select: 'name -_id'
+    })
+    .populate({
+      path: 'category',
+      model: 'Category', 
+      select: 'name -_id',
+    })
+    .exec()
+
+    return {
+          ...post.toObject(),
+          tags: post.tags ? post.tags.map(tag => tag['name']): null,  
+          category: post.category ? post.category['name'] : null,  // Extract the 'name' from category
+      };
+    
   }
 
   update(id: number, updatePostDto: UpdatePostDto) {
