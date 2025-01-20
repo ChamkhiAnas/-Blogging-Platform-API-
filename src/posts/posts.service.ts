@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { InjectModel } from '@nestjs/mongoose';
@@ -119,8 +119,79 @@ export class PostsService {
     
   }
 
-  update(id: number, updatePostDto: UpdatePostDto) {
-    return `This action updates a #${id} post`;
+  async update(id: string, updatePostDto: UpdatePostDto) {
+    //1) check if post exist if doesnt return an error 
+    const post=await this.postModel.findById(id)
+    if(!post){
+      throw new HttpException(`Post with the id ${id} doesnt exist`,HttpStatus.NOT_FOUND)
+    }
+
+
+    //2) check if category exist if not create it 
+    const {tags,category,...currentPost}=await updatePostDto
+    let category_id;
+    let new_category_id;
+
+    if(category){
+      const currentCategory=await this.categoryModel.findOne({
+        name:category
+      })
+  
+      category_id= await currentCategory
+  
+
+      if(!currentCategory){
+        const newCategory=await new this.categoryModel({"name":category})
+        category_id=await newCategory.save()
+      }
+  
+    }
+
+    await updatePostDto.category ? new_category_id=category_id._id : new_category_id=post.category
+
+
+    //3) check if tags are empty we dont change anything else we pull old tags and add new ones 
+    let newPost;
+    
+    if(tags){
+      
+      const findedTags = await Promise.all(
+        tags.map(async (tag)=>{
+          const findedTag=await this.tagModel.findOne({"name":tag})
+          if(!findedTag){
+            const newTag=await new this.tagModel({"name":tag})
+            const newTagId =  await newTag.save()
+            return newTagId._id
+          }
+          return findedTag._id
+        })
+      );
+  
+      await findedTags
+      
+
+
+      await this.postModel.updateOne(
+        { _id: post._id },
+        { $pull: { tags: { $in: post.tags } } } // Use $in to remove multiple tags
+      );
+
+      newPost = await this.postModel.updateOne(
+        { _id: post._id },
+        { 
+          $push: { tags: { $each: findedTags } }, // Use $each to push multiple tags
+          $set: {
+            category: new_category_id, // Update the category
+            title: currentPost.title,  // Update the title
+            content: currentPost.content // Update the content
+          }
+        }
+      );
+
+    }
+
+    return newPost
+
   }
 
   remove(id: number) {
