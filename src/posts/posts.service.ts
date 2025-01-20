@@ -194,7 +194,7 @@ export class PostsService {
 
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} post`;
+  async remove(id: string) {
+    return await this.postModel.findByIdAndDelete(id)
   }
 }
